@@ -14,8 +14,8 @@ using Android.Hardware.Camera2.Params;
 using Android.Media;
 using Android.Support.V13.App;
 using Android.Support.V4.Content;
-using FirstAlert.Algorithm;
 using FirstAlert.Dialogs;
+using FirstAlert.Imaging;
 using FirstAlert.Listeners;
 using FirstAlert.Views;
 using Java.IO;
@@ -31,45 +31,42 @@ namespace FirstAlert.Fragments
 {
     public class CameraFragment : Fragment, View.IOnClickListener, FragmentCompat.IOnRequestPermissionsResultCallback
     {
-        private static readonly SparseIntArray ORIENTATIONS = new SparseIntArray();
-        public static readonly int REQUEST_CAMERA_PERMISSION = 1;
-        private static readonly string FRAGMENT_DIALOG = "dialog";
-
-               // Tag for the {@link Log}.
         private static readonly string TAG = "CameraFragment";
-
-        public const int STATE_PREVIEW = 0;
+        private const int STATE_PREVIEW = 0;
         public const int STATE_WAITING_LOCK = 1;
         public const int STATE_WAITING_PRECAPTURE = 2;
         public const int STATE_WAITING_NON_PRECAPTURE = 3;
         public const int STATE_PICTURE_TAKEN = 4;
         private static readonly int MAX_PREVIEW_WIDTH = 1920;
         private static readonly int MAX_PREVIEW_HEIGHT = 1080;
+        private static readonly SparseIntArray ORIENTATIONS = new SparseIntArray();
+        public static readonly int REQUEST_CAMERA_PERMISSION = 1;
+        private static readonly string FRAGMENT_DIALOG = "dialog";
         
         private SurfaceTextureListener mSurfaceTextureListener;
-        private string mCameraId;
-
         private AutoFitTextureView mTextureView;
+
         public CameraCaptureSession mCaptureSession;
         public CameraDevice mCameraDevice;
-        private Size mPreviewSize;
+        public CaptureRequest.Builder mPreviewRequestBuilder;
+        public CaptureRequest mPreviewRequest;
+        public CaptureListener mCaptureCallback;
         private StateListener mStateCallback;
+        private ImageAvailableListener mOnImageAvailableListener;
+
+        private Size mPreviewSize;
         private HandlerThread mBackgroundThread;
         public Handler mBackgroundHandler;
         private ImageReader mImageReader;
         public File mFile;
 
-        private ImageAvailableListener mOnImageAvailableListener;
-        public CaptureRequest.Builder mPreviewRequestBuilder;
-        public CaptureRequest mPreviewRequest;
-        public CaptureListener mCaptureCallback;
-        
-        public int mState = STATE_PREVIEW;
         public Semaphore mCameraOpenCloseLock = new Semaphore(1);
+        private string mCameraId;
+        public int mState = STATE_PREVIEW;
         private bool mFlashSupported;
         private int mSensorOrientation;
 
-        private ImageClassifier tensorflow;
+        public ImageClassifier tensorflow;
 
         public void ShowToast(string text)
         {
@@ -232,8 +229,6 @@ namespace FirstAlert.Fragments
             }
         }
 
-
-        // Sets up member variables related to camera.
         private void SetUpCameraOutputs(int width, int height)
         {
             var activity = Activity;
@@ -361,7 +356,6 @@ namespace FirstAlert.Fragments
             }
         }
 
-        // Opens the camera specified by {@link Camera2BasicFragment#mCameraId}.
         public void OpenCamera(int width, int height)
         {
             if (ContextCompat.CheckSelfPermission(Activity, Manifest.Permission.Camera) != Permission.Granted)
@@ -391,7 +385,6 @@ namespace FirstAlert.Fragments
             }
         }
 
-        // Closes the current {@link CameraDevice}.
         private void CloseCamera()
         {
             try
@@ -423,7 +416,6 @@ namespace FirstAlert.Fragments
             }
         }
 
-        // Starts a background thread and its {@link Handler}.
         private void StartBackgroundThread()
         {
             mBackgroundThread = new HandlerThread("CameraBackground");
@@ -431,7 +423,6 @@ namespace FirstAlert.Fragments
             mBackgroundHandler = new Handler(mBackgroundThread.Looper);
         }
 
-        // Stops the background thread and its {@link Handler}.
         private void StopBackgroundThread()
         {
             mBackgroundThread.QuitSafely();
@@ -447,7 +438,7 @@ namespace FirstAlert.Fragments
             }
         }
 
-        // Creates a new {@link CameraCaptureSession} for camera preview.
+ 
         public void CreateCameraPreviewSession()
         {
             try
@@ -487,11 +478,6 @@ namespace FirstAlert.Fragments
             return propertyInfo == null ? null : propertyInfo.GetValue(obj, null) as T;
         }
 
-        // Configures the necessary {@link android.graphics.Matrix}
-        // transformation to `mTextureView`.
-        // This method should be called after the camera preview size is determined in
-        // setUpCameraOutputs and also the size of `mTextureView` is fixed.
-
         public void ConfigureTransform(int viewWidth, int viewHeight)
         {
             Activity activity = Activity;
@@ -520,13 +506,11 @@ namespace FirstAlert.Fragments
             mTextureView.SetTransform(matrix);
         }
 
-        // Initiate a still image capture.
         private void TakePicture()
         {
             LockFocus();
         }
 
-        // Lock the focus as the first step for a still image capture.
         private void LockFocus()
         {
             try
@@ -545,8 +529,6 @@ namespace FirstAlert.Fragments
             }
         }
 
-        // Run the precapture sequence for capturing a still image. This method should be called when
-        // we get a response in {@link #mCaptureCallback} from {@link #lockFocus()}.
         public void RunPrecaptureSequence()
         {
             try
@@ -565,8 +547,6 @@ namespace FirstAlert.Fragments
 
         private CaptureRequest.Builder stillCaptureBuilder;
 
-        // Capture a still picture. This method should be called when we get a response in
-        // {@link #mCaptureCallback} from both {@link #lockFocus()}.
         public void CaptureStillPicture()
         {
             try
@@ -599,7 +579,6 @@ namespace FirstAlert.Fragments
             }
         }
 
-        // Retrieves the JPEG orientation from the specified screen rotation.
         private int GetOrientation(int rotation)
         {
             // Sensor orientation is 90 for most devices, or 270 for some devices (eg. Nexus 5X)
@@ -609,8 +588,6 @@ namespace FirstAlert.Fragments
             return (ORIENTATIONS.Get(rotation) + mSensorOrientation + 270) % 360;
         }
 
-        // Unlock the focus. This method should be called when still image capture sequence is
-        // finished.
         public void UnlockFocus()
         {
             try
